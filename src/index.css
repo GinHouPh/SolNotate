@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Solfa';
+  src: url('./fonts/solfa.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+.font-solfa {
+  font-family: 'Solfa', sans-serif;
+}

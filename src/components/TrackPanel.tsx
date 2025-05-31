@@ -58,6 +58,7 @@ const TrackPanel = () => {
   const [currentSubdivision, setCurrentSubdivision] = useState<Subdivision | null>(null);
   const [isHighOctave, setIsHighOctave] = useState(false);
   const [isLowOctave, setIsLowOctave] = useState(false);
+  const [currentArticulation, setCurrentArticulation] = useState<string | null>(null);
   const [selectedChordRoot, setSelectedChordRoot] = useState<string | null>(null);
   const [selectedChordType, setSelectedChordType] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
@@ -336,9 +337,10 @@ const TrackPanel = () => {
                           style={{ width: `${GRID_CELL_WIDTH * zoom}px`, height: 28 }}
                           onClick={() => {
                             setSelectedCell({ measureIdx, rowIdx, segIdx, boxIdx });
-                            // Toggle note selection logic here
+                            // Note entry logic here
                             if (currentNote) {
-                              console.log(`Placing note ${currentNote} with subdivision ${currentSubdivision} at measure ${measureIdx + 1}, segment ${segIdx + 1}, box ${boxIdx + 1}, row ${rowIdx + 1}`);
+                              const note = isHighOctave ? currentNote.toUpperCase() : isLowOctave ? currentNote.toLowerCase() : currentNote;
+                              console.log(`Placing note ${note} with subdivision ${currentSubdivision} and articulation ${currentArticulation} at measure ${measureIdx + 1}, segment ${segIdx + 1}, box ${boxIdx + 1}, row ${rowIdx + 1}`);
                             }
                           }}
                           tabIndex={isSelected ? 0 : -1}

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Plus, Minus, Music, ChevronUp, Hash, Volume2, Zap, Clock, Repeat } from 'lucide-react';
 import { FaSearchPlus, FaSearchMinus } from 'react-icons/fa';
 import { FaDrumSteelpan } from 'react-icons/fa6';
@@ -151,7 +151,7 @@ const TrackPanel = () => {
           {Array.from({ length: measureCount }).map((_, measureIdx) => (
             <div key={measureIdx} className="flex items-center h-full">
               {pattern.map((seg, segIdx) => (
-                <>
+                <React.Fragment key={`marker-fragment-${measureIdx}-${segIdx}`}>
                   <span
                     key={`bar-${segIdx}`}
                     style={{
@@ -178,7 +178,7 @@ const TrackPanel = () => {
                   >
                     {/* Marker cell placeholder */}
                   </div>
-                </>
+                </React.Fragment>
               ))}
             </div>
           ))}

@@ -48,6 +48,14 @@ export interface Measure {
   };
 }
 
+export interface LyricEntry {
+  measureIdx: number;
+  segIdx: number;
+  boxIdx: number;
+  text: string;
+  syllable?: string; // For multi-syllable words
+}
+
 export interface Composition {
   id: string;
   name: string;
@@ -55,6 +63,7 @@ export interface Composition {
   measures: Measure[];
   tempo: number;
   markers: Marker[];
+  lyrics?: LyricEntry[];
 }
 
 export type Tool = {

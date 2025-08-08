@@ -5,9 +5,9 @@ import { FaDrumSteelpan } from 'react-icons/fa6';
 import MusicStaff from './MusicStaff';
 import PlaybackControls from './PlaybackControls';
 import TimeSignatureSelector from './TimeSignatureSelector';
-import type { Note, VoicePart, TimeSignature, NoteType, Subdivision, Tool } from '../types/music';
+import type { Note, VoicePart, TimeSignature, NoteType, Subdivision, Tool, LyricEntry } from '../types/music';
 
-type TrackKey = VoicePart | 'Chord' | 'Lyrics';
+type TrackKey = VoicePart | 'Chord';
 
 const SATB_LABELS: Record<VoicePart, string> = {
   S: 'Soprano',
@@ -39,8 +39,7 @@ const TrackPanel = () => {
     A: [] as Note[],
     T: [] as Note[],
     B: [] as Note[],
-    Chord: [] as Note[],
-    Lyrics: [] as Note[]
+    Chord: [] as Note[]
   });
   const [isPlaying, setIsPlaying] = useState(false);
   const [panelHeight, setPanelHeight] = useState(320);
@@ -65,6 +64,9 @@ const TrackPanel = () => {
   const [chordPopup, setChordPopup] = useState<{ measureIdx: number; segIdx: number; x: number; y: number } | null>(null);
   const [chords, setChords] = useState<Record<string, { root: string; type: string; symbol: string }>>({});
   const [pendingChord, setPendingChord] = useState<{ root: string; type: string }>({ root: 'C', type: 'maj' });
+  const [lyrics, setLyrics] = useState<Record<string, string>>({});
+  const [lyricPopup, setLyricPopup] = useState<{ measureIdx: number; segIdx: number; boxIdx: number; x: number; y: number } | null>(null);
+  const [pendingLyric, setPendingLyric] = useState<string>('');
 
   const clearAll = () => {
     setTracks({
@@ -72,10 +74,10 @@ const TrackPanel = () => {
       A: [],
       T: [],
       B: [],
-      Chord: [],
-      Lyrics: []
+      Chord: []
     });
     setChords({});
+    setLyrics({});
   };
 
   const addMeasure = () => {
@@ -434,7 +436,110 @@ const TrackPanel = () => {
     );
   };
 
-  // Update Lyrics track to use blank spacers for bars/colons
+  // Lyrics functionality
+  const handleLyricAdd = () => {
+    if (!lyricPopup || !pendingLyric.trim()) return;
+    
+    const { measureIdx, segIdx, boxIdx } = lyricPopup;
+    const lyricKey = `${measureIdx}-${segIdx}-${boxIdx}`;
+    
+    setLyrics(prev => ({
+      ...prev,
+      [lyricKey]: pendingLyric.trim()
+    }));
+    
+    setLyricPopup(null);
+    setPendingLyric('');
+  };
+
+  const handleLyricDelete = (measureIdx: number, segIdx: number, boxIdx: number) => {
+    const lyricKey = `${measureIdx}-${segIdx}-${boxIdx}`;
+    setLyrics(prev => {
+      const newLyrics = { ...prev };
+      delete newLyrics[lyricKey];
+      return newLyrics;
+    });
+  };
+
+  const handleLyricCancel = () => {
+    setLyricPopup(null);
+    setPendingLyric('');
+  };
+
+  // Render lyric popup
+  const renderLyricPopup = () => {
+    if (!lyricPopup) return null;
+
+    const existingLyric = lyrics[`${lyricPopup.measureIdx}-${lyricPopup.segIdx}-${lyricPopup.boxIdx}`];
+
+    return (
+      <div 
+        className="fixed bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg p-4 z-50"
+        style={{ 
+          left: lyricPopup.x, 
+          top: lyricPopup.y - 150,
+          minWidth: '280px'
+        }}
+      >
+        <h3 className="text-sm font-semibold mb-3">Add Lyric</h3>
+        
+        {/* Text Input */}
+        <div className="mb-4">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Lyric Text</label>
+          <input
+            type="text"
+            value={pendingLyric}
+            onChange={(e) => setPendingLyric(e.target.value)}
+            placeholder="Enter lyric text..."
+            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleLyricAdd();
+              } else if (e.key === 'Escape') {
+                handleLyricCancel();
+              }
+            }}
+          />
+          <div className="text-xs text-slate-400 mt-1">Press Enter to add, Escape to cancel</div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-2 justify-between">
+          <div>
+            {existingLyric && (
+              <button
+                className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded"
+                onClick={() => {
+                  handleLyricDelete(lyricPopup.measureIdx, lyricPopup.segIdx, lyricPopup.boxIdx);
+                  handleLyricCancel();
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded hover:bg-slate-300 dark:hover:bg-slate-500"
+              onClick={handleLyricCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              onClick={handleLyricAdd}
+              disabled={!pendingLyric.trim()}
+            >
+              Add Lyric
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Update Lyrics track with clickable lyric cells
   const renderLyricsTrack = () => {
     const pattern = getSolfaBarBoxPattern(timeSignature);
     return (
@@ -443,7 +548,62 @@ const TrackPanel = () => {
           Lyrics
         </span>
         <div className="flex-1 min-w-0 flex">
-          {renderSolfaBlankRow(pattern, measureCount, zoom)}
+          {Array.from({ length: measureCount }).map((_, measureIdx) => (
+            <div key={measureIdx} className="flex items-center h-full">
+              {pattern.map((seg, segIdx) => (
+                <React.Fragment key={`lyric-fragment-${measureIdx}-${segIdx}`}>
+                  <span
+                    key={`bar-${segIdx}`}
+                    style={{
+                      width: `${GRID_CELL_WIDTH * zoom}px`,
+                      minWidth: `${GRID_CELL_WIDTH * zoom}px`,
+                      display: 'inline-block',
+                      textAlign: 'center'
+                    }}
+                    className="select-none"
+                  >
+                    {'\u00A0'}
+                  </span>
+                  {Array.from({ length: seg.boxes }).map((_, boxIdx) => {
+                    const lyricKey = `${measureIdx}-${segIdx}-${boxIdx}`;
+                    const lyric = lyrics[lyricKey];
+                    
+                    return (
+                      <div
+                        key={`lyric-${boxIdx}`}
+                        className={`flex-shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer transition-colors text-xs ${
+                          lyric 
+                            ? 'bg-green-100 dark:bg-green-800 hover:bg-green-200 dark:hover:bg-green-700' 
+                            : 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                        style={{ width: `${GRID_CELL_WIDTH * zoom}px`, height: 28 }}
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const existingLyric = lyrics[lyricKey];
+                          
+                          // Initialize pending lyric with existing lyric or empty
+                          setPendingLyric(existingLyric || '');
+                          
+                          setLyricPopup({
+                            measureIdx,
+                            segIdx,
+                            boxIdx,
+                            x: rect.left,
+                            y: rect.top
+                          });
+                        }}
+                        title={lyric || 'Click to add lyric'}
+                      >
+                        <span className="truncate px-1 text-green-700 dark:text-green-300 font-medium">
+                          {lyric || '+'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -694,21 +854,28 @@ const TrackPanel = () => {
     setSelectedCell({ measureIdx: m, rowIdx: r, segIdx: s, boxIdx: b });
   };
 
-  // Close chord popup when clicking outside
+  // Close popups when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (chordPopup && !(e.target as Element).closest('.fixed')) {
+      const targetElement = e.target as Element;
+      const isInsidePopup = targetElement.closest('.fixed');
+      
+      if (chordPopup && !isInsidePopup) {
         handleChordCancel();
+      }
+      if (lyricPopup && !isInsidePopup) {
+        handleLyricCancel();
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [chordPopup]);
+  }, [chordPopup, lyricPopup]);
 
   return (
     <>
       {renderChordPopup()}
+      {renderLyricPopup()}
       <div
         className={`fixed bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 transition-all duration-300 ${isCollapsed ? 'h-12' : ''}`}
         style={{

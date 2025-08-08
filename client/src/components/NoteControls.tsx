@@ -110,17 +110,13 @@ const NoteControls = ({
   const [selectedTool, setSelectedTool] = useState<any>(null);
   const [collapsed, setCollapsed] = useState({
     notes: false,
-    chord: false,
     dynamics: false,
     articulations: false,
     tempo: false,
     repeats: false,
   });
-  const [selectedChordRoot, setSelectedChordRoot] = useState('C');
-  const [selectedChordType, setSelectedChordType] = useState('maj');
   const [focusedButton, setFocusedButton] = useState<{ group: string, index: number } | null>(null);
   const buttonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
-  const [previewChord, setPreviewChord] = useState<string>('');
   
   const subdivisionLabels: Record<Subdivision, string> = {
     '': 'None',
@@ -174,7 +170,7 @@ const NoteControls = ({
   };
 
   // Define group order for navigation
-  const groupOrder = ['notes', 'chord', 'dynamics', 'articulations', 'tempo', 'repeats'];
+  const groupOrder = ['notes', 'dynamics', 'articulations', 'tempo', 'repeats'];
 
   // Flatten all note-related buttons into a single array for navigation
   const allNoteButtons = [
@@ -185,11 +181,7 @@ const NoteControls = ({
     { group: 'notes', type: 'octave', value: 'low', label: 'low', idx: notes.length + ACCIDENTAL_NOTES.length + SUBDIVISION_SYMBOLS.length + 1 },
   ];
 
-  // Update chord selection logic to set previewChord
-  useEffect(() => {
-    const chordType = CHORD_TYPES.find(t => t.value === selectedChordType)?.label || '';
-    setPreviewChord(`${selectedChordRoot} ${chordType}`);
-  }, [selectedChordRoot, selectedChordType]);
+
   
   return (
     <div className="space-y-6 p-2 w-56 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 h-full overflow-y-auto">
@@ -297,53 +289,7 @@ const NoteControls = ({
       </div>
       {/* Toolbox Groups */}
       <div className="space-y-4">
-        {/* Chord Selection */}
-        <div>
-          <div className="flex items-center justify-between cursor-pointer" onClick={() => setCollapsed(c => ({ ...c, chord: !c.chord }))}>
-            <span className="flex items-center gap-1">
-              <Hash className="h-4 w-4 text-purple-400" />
-              <h4 className="font-semibold text-xs text-slate-500 mb-1">Chord Selection</h4>
-            </span>
-            <span className="text-xs">{collapsed.chord ? '+' : '-'}</span>
-          </div>
-          {!collapsed.chord && (
-            <>
-              <div className="flex gap-2 flex-wrap mb-2">
-                {CHORD_ROOTS.map((root, i) => (
-                  <button
-                    key={root}
-                    ref={el => buttonRefs.current[`chord-${i}`] = el}
-                    tabIndex={focusedButton?.group === 'chord' && focusedButton.index === i ? 0 : -1}
-                    onFocus={() => setFocusedButton({ group: 'chord', index: i })}
-                    onKeyDown={e => handleButtonKeyDown(e, 'chord', i, CHORD_ROOTS, groupOrder)}
-                    className={`px-2 py-1 rounded text-sm border ${selectedChordRoot === root ? 'bg-blue-200 dark:bg-blue-800' : 'bg-white dark:bg-slate-800'} hover:bg-blue-100 dark:hover:bg-blue-700`}
-                    onClick={() => setSelectedChordRoot(root)}
-                    aria-label={`Chord Root ${root}`}
-                  >
-                    {root}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2 flex-wrap mb-2">
-                {CHORD_TYPES.map((chord, i) => (
-                  <button
-                    key={chord.value}
-                    ref={el => buttonRefs.current[`chord-type-${i}`] = el}
-                    tabIndex={focusedButton?.group === 'chord' && focusedButton.index === i + CHORD_ROOTS.length ? 0 : -1}
-                    onFocus={() => setFocusedButton({ group: 'chord', index: i + CHORD_ROOTS.length })}
-                    onKeyDown={e => handleButtonKeyDown(e, 'chord', i + CHORD_ROOTS.length, [...CHORD_ROOTS, ...CHORD_TYPES], groupOrder)}
-                    className={`px-2 py-1 rounded text-sm border ${selectedChordType === chord.value ? 'bg-blue-200 dark:bg-blue-800' : 'bg-white dark:bg-slate-800'} hover:bg-blue-100 dark:hover:bg-blue-700`}
-                    onClick={() => setSelectedChordType(chord.value)}
-                    aria-label={`Chord Type ${chord.label}`}
-                  >
-                    {chord.label}
-                  </button>
-                ))}
-              </div>
-              <div className="text-xs text-slate-400 mb-2">Selected: {previewChord}</div>
-            </>
-          )}
-        </div>
+
         {/* Dynamics */}
         <div>
           <div className="flex items-center justify-between cursor-pointer" onClick={() => setCollapsed(c => ({ ...c, dynamics: !c.dynamics }))}>

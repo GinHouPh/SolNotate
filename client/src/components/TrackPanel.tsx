@@ -59,12 +59,11 @@ const TrackPanel = () => {
   const [isHighOctave, setIsHighOctave] = useState(false);
   const [isLowOctave, setIsLowOctave] = useState(false);
   const [currentArticulation, setCurrentArticulation] = useState<string | null>(null);
-  const [selectedChordRoot, setSelectedChordRoot] = useState<string | null>(null);
-  const [selectedChordType, setSelectedChordType] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
-  const [previewChord, setPreviewChord] = useState<string | null>(null);
+  const [chordPopup, setChordPopup] = useState<{ measureIdx: number; segIdx: number; x: number; y: number } | null>(null);
+  const [chords, setChords] = useState<Record<string, { root: string; type: string; symbol: string }>>({});
 
   const clearAll = () => {
     setTracks({
@@ -75,6 +74,7 @@ const TrackPanel = () => {
       Chord: [],
       Lyrics: []
     });
+    setChords({});
   };
 
   const addMeasure = () => {
@@ -448,7 +448,121 @@ const TrackPanel = () => {
     );
   };
 
-  // Update Chord track to remove beat markers and use empty spaces
+  // Chord selection constants
+  const CHORD_ROOTS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  const CHORD_TYPES = [
+    { value: 'maj', label: 'Major', symbol: '' },
+    { value: 'min', label: 'Minor', symbol: 'm' },
+    { value: 'dim', label: 'Diminished', symbol: '°' },
+    { value: 'aug', label: 'Augmented', symbol: '+' },
+    { value: 'dom7', label: 'Dominant 7th', symbol: '7' },
+    { value: 'maj7', label: 'Major 7th', symbol: 'maj7' },
+    { value: 'min7', label: 'Minor 7th', symbol: 'm7' }
+  ];
+
+  // Handle chord selection
+  const handleChordSelect = (root: string, type: string) => {
+    if (!chordPopup) return;
+    
+    const { measureIdx, segIdx } = chordPopup;
+    const chordKey = `${measureIdx}-${segIdx}`;
+    const typeInfo = CHORD_TYPES.find(t => t.value === type);
+    const symbol = `${root}${typeInfo?.symbol || ''}`;
+    
+    setChords(prev => ({
+      ...prev,
+      [chordKey]: { root, type, symbol }
+    }));
+    
+    setChordPopup(null);
+  };
+
+  // Handle chord deletion
+  const handleChordDelete = (measureIdx: number, segIdx: number) => {
+    const chordKey = `${measureIdx}-${segIdx}`;
+    setChords(prev => {
+      const newChords = { ...prev };
+      delete newChords[chordKey];
+      return newChords;
+    });
+  };
+
+  // Render chord popup
+  const renderChordPopup = () => {
+    if (!chordPopup) return null;
+
+    return (
+      <div 
+        className="fixed bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg p-4 z-50"
+        style={{ 
+          left: chordPopup.x, 
+          top: chordPopup.y - 200,
+          minWidth: '280px'
+        }}
+      >
+        <h3 className="text-sm font-semibold mb-3">Select Chord</h3>
+        
+        {/* Chord Roots */}
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Root Note</label>
+          <div className="flex gap-1">
+            {CHORD_ROOTS.map(root => (
+              <button
+                key={root}
+                className="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                onClick={() => {
+                  const currentChord = chords[`${chordPopup.measureIdx}-${chordPopup.segIdx}`];
+                  handleChordSelect(root, currentChord?.type || 'maj');
+                }}
+              >
+                {root}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Chord Types */}
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Chord Type</label>
+          <div className="grid grid-cols-2 gap-1">
+            {CHORD_TYPES.map(chord => (
+              <button
+                key={chord.value}
+                className="px-2 py-1 text-xs border rounded text-left hover:bg-slate-100 dark:hover:bg-slate-700"
+                onClick={() => {
+                  const currentChord = chords[`${chordPopup.measureIdx}-${chordPopup.segIdx}`];
+                  handleChordSelect(currentChord?.root || 'C', chord.value);
+                }}
+              >
+                {chord.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-2 justify-end">
+          <button
+            className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900"
+            onClick={() => {
+              handleChordDelete(chordPopup.measureIdx, chordPopup.segIdx);
+              setChordPopup(null);
+            }}
+          >
+            Delete
+          </button>
+          <button
+            className="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded hover:bg-slate-300"
+            onClick={() => setChordPopup(null)}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Update Chord track with clickable chord blocks
   const renderChordTrack = () => {
     const pattern = getSolfaBarBoxPattern(timeSignature);
     return (
@@ -459,33 +573,49 @@ const TrackPanel = () => {
         <div className="flex-1 min-w-0 flex">
           {Array.from({ length: measureCount }).map((_, measureIdx) => (
             <div key={measureIdx} className="flex items-center h-full">
-              {pattern.map((seg, segIdx) => (
-                <>
-                  <span
-                    key={`bar-${segIdx}`}
-                    style={{
-                      width: `${GRID_CELL_WIDTH * zoom}px`,
-                      minWidth: `${GRID_CELL_WIDTH * zoom}px`,
-                      display: 'inline-block',
-                      textAlign: 'center'
-                    }}
-                    className="select-none font-solfa"
-                  >
-                    {'\u00A0'}
-                  </span>
-                  <div
-                    key={`chord-${segIdx}`}
-                    className="flex-shrink-0 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center"
-                    style={{ width: `${GRID_CELL_WIDTH * 4 * zoom}px`, height: 28 }}
-                    onClick={() => {
-                      // Place chord logic here
-                      console.log(`Placing chord at measure ${measureIdx + 1}, segment ${segIdx + 1}`);
-                    }}
-                  >
-                    {/* Chord name will be placed here */}
-                  </div>
-                </>
-              ))}
+              {pattern.map((seg, segIdx) => {
+                const chordKey = `${measureIdx}-${segIdx}`;
+                const chord = chords[chordKey];
+                
+                return (
+                  <React.Fragment key={`chord-fragment-${measureIdx}-${segIdx}`}>
+                    <span
+                      key={`bar-${segIdx}`}
+                      style={{
+                        width: `${GRID_CELL_WIDTH * zoom}px`,
+                        minWidth: `${GRID_CELL_WIDTH * zoom}px`,
+                        display: 'inline-block',
+                        textAlign: 'center'
+                      }}
+                      className="select-none font-solfa"
+                    >
+                      {'\u00A0'}
+                    </span>
+                    <div
+                      key={`chord-${segIdx}`}
+                      className={`flex-shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer transition-colors ${
+                        chord 
+                          ? 'bg-purple-100 dark:bg-purple-800 hover:bg-purple-200 dark:hover:bg-purple-700' 
+                          : 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                      style={{ width: `${GRID_CELL_WIDTH * 4 * zoom}px`, height: 28 }}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setChordPopup({
+                          measureIdx,
+                          segIdx,
+                          x: rect.left,
+                          y: rect.top
+                        });
+                      }}
+                    >
+                      <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                        {chord?.symbol || '+'}
+                      </span>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -523,18 +653,32 @@ const TrackPanel = () => {
     setSelectedCell({ measureIdx: m, rowIdx: r, segIdx: s, boxIdx: b });
   };
 
+  // Close chord popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (chordPopup && !(e.target as Element).closest('.fixed')) {
+        setChordPopup(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [chordPopup]);
+
   return (
-    <div
-      className={`fixed bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 transition-all duration-300 ${isCollapsed ? 'h-12' : ''}`}
-      style={{
-        height: isCollapsed ? 48 : panelHeight + 48,
-        left: '220px', // leave space for sidebar (adjust if sidebar width changes)
-        right: 0,
-        maxWidth: '1200px', // or '80vw' for responsive
-        margin: '0 auto',
-        zIndex: 20
-      }}
-    >
+    <>
+      {renderChordPopup()}
+      <div
+        className={`fixed bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 transition-all duration-300 ${isCollapsed ? 'h-12' : ''}`}
+        style={{
+          height: isCollapsed ? 48 : panelHeight + 48,
+          left: '220px', // leave space for sidebar (adjust if sidebar width changes)
+          right: 0,
+          maxWidth: '1200px', // or '80vw' for responsive
+          margin: '0 auto',
+          zIndex: 20
+        }}
+      >
       <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-1 z-10">
         <button onClick={() => setIsCollapsed(!isCollapsed)}>
           <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} />
@@ -610,7 +754,8 @@ const TrackPanel = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

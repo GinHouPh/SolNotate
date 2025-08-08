@@ -67,7 +67,10 @@ const TrackPanel = () => {
   const [lyrics, setLyrics] = useState<Record<string, string>>({});
   const [lyricPopup, setLyricPopup] = useState<{ measureIdx: number; segIdx: number; boxIdx: number; x: number; y: number } | null>(null);
   const [pendingLyric, setPendingLyric] = useState<string>('');
-  const [clearWarning, setClearWarning] = useState<{type: 'SATB' | 'Chord' | 'Lyrics'; trackName?: string} | null>(null);
+  const [clearWarning, setClearWarning] = useState<{type: 'SATB' | 'Chord' | 'Lyrics' | 'Marker'; trackName?: string} | null>(null);
+  const [markers, setMarkers] = useState<Record<string, string>>({});
+  const [markerPopup, setMarkerPopup] = useState<{ measureIdx: number; segIdx: number; x: number; y: number } | null>(null);
+  const [pendingMarker, setPendingMarker] = useState<string>('');
 
   const clearAll = () => {
     setTracks({
@@ -79,6 +82,7 @@ const TrackPanel = () => {
     });
     setChords({});
     setLyrics({});
+    setMarkers({});
   };
 
   // Clear track functions with warnings
@@ -92,6 +96,10 @@ const TrackPanel = () => {
 
   const handleClearLyricsTrack = () => {
     setClearWarning({ type: 'Lyrics' });
+  };
+
+  const handleClearMarkerTrack = () => {
+    setClearWarning({ type: 'Marker' });
   };
 
   const confirmClear = () => {
@@ -112,6 +120,8 @@ const TrackPanel = () => {
       setChords({});
     } else if (clearWarning.type === 'Lyrics') {
       setLyrics({});
+    } else if (clearWarning.type === 'Marker') {
+      setMarkers({});
     }
 
     setClearWarning(null);
@@ -119,6 +129,52 @@ const TrackPanel = () => {
 
   const cancelClear = () => {
     setClearWarning(null);
+  };
+
+  // Marker templates and functionality
+  const MARKER_TEMPLATES = [
+    { label: 'Verse', value: 'Verse', color: 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300' },
+    { label: 'Chorus', value: 'Chorus', color: 'bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300' },
+    { label: 'Bridge', value: 'Bridge', color: 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' },
+    { label: 'Intro', value: 'Intro', color: 'bg-yellow-100 dark:bg-yellow-800 text-yellow-700 dark:text-yellow-300' },
+    { label: 'Outro', value: 'Outro', color: 'bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300' },
+    { label: 'Solo', value: 'Solo', color: 'bg-orange-100 dark:bg-orange-800 text-orange-700 dark:text-orange-300' },
+    { label: 'Break', value: 'Break', color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' },
+    { label: 'Pre-Chorus', value: 'Pre-Chorus', color: 'bg-pink-100 dark:bg-pink-800 text-pink-700 dark:text-pink-300' }
+  ];
+
+  const handleMarkerAdd = () => {
+    if (!markerPopup || !pendingMarker.trim()) return;
+    
+    const { measureIdx, segIdx } = markerPopup;
+    const markerKey = `${measureIdx}-${segIdx}`;
+    
+    setMarkers(prev => ({
+      ...prev,
+      [markerKey]: pendingMarker.trim()
+    }));
+    
+    setMarkerPopup(null);
+    setPendingMarker('');
+  };
+
+  const handleMarkerDelete = (measureIdx: number, segIdx: number) => {
+    const markerKey = `${measureIdx}-${segIdx}`;
+    setMarkers(prev => {
+      const newMarkers = { ...prev };
+      delete newMarkers[markerKey];
+      return newMarkers;
+    });
+  };
+
+  const handleMarkerCancel = () => {
+    setMarkerPopup(null);
+    setPendingMarker('');
+  };
+
+  const getMarkerColor = (markerText: string) => {
+    const template = MARKER_TEMPLATES.find(t => t.value === markerText);
+    return template ? template.color : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
   };
 
   const addMeasure = () => {
@@ -183,47 +239,171 @@ const TrackPanel = () => {
     </div>
   );
 
-  // Update Marker track to allow marker placement
+  // Render marker popup
+  const renderMarkerPopup = () => {
+    if (!markerPopup) return null;
+
+    const existingMarker = markers[`${markerPopup.measureIdx}-${markerPopup.segIdx}`];
+
+    return (
+      <div 
+        className="fixed bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg p-4 z-50"
+        style={{ 
+          left: markerPopup.x, 
+          top: markerPopup.y - 280,
+          minWidth: '320px'
+        }}
+      >
+        <h3 className="text-sm font-semibold mb-3">Add Marker</h3>
+        
+        {/* Template buttons */}
+        <div className="mb-4">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-2 block">Quick Templates</label>
+          <div className="grid grid-cols-2 gap-2">
+            {MARKER_TEMPLATES.map(template => (
+              <button
+                key={template.value}
+                className={`px-3 py-2 text-xs rounded transition-colors border hover:opacity-80 ${template.color}`}
+                onClick={() => setPendingMarker(template.value)}
+              >
+                {template.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Custom text input */}
+        <div className="mb-4">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Custom Marker Text</label>
+          <input
+            type="text"
+            value={pendingMarker}
+            onChange={(e) => setPendingMarker(e.target.value)}
+            placeholder="Enter custom marker text..."
+            className="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-green-500 dark:bg-slate-700 dark:text-white"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleMarkerAdd();
+              } else if (e.key === 'Escape') {
+                handleMarkerCancel();
+              }
+            }}
+          />
+          <div className="text-xs text-slate-400 mt-1">Press Enter to add, Escape to cancel</div>
+        </div>
+
+        {/* Preview */}
+        {pendingMarker && (
+          <div className="mb-4 p-2 bg-slate-50 dark:bg-slate-700 rounded border">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Preview: </span>
+            <span className={`px-2 py-1 text-xs rounded ${getMarkerColor(pendingMarker)}`}>
+              {pendingMarker}
+            </span>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 justify-between">
+          <div>
+            {existingMarker && (
+              <button
+                className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded"
+                onClick={() => {
+                  handleMarkerDelete(markerPopup.measureIdx, markerPopup.segIdx);
+                  handleMarkerCancel();
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded hover:bg-slate-300 dark:hover:bg-slate-500"
+              onClick={handleMarkerCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              onClick={handleMarkerAdd}
+              disabled={!pendingMarker.trim()}
+            >
+              Add Marker
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Update Marker track with clickable marker cells and clear button
   const renderMarkerTrack = () => {
     const pattern = getSolfaBarBoxPattern(timeSignature);
     return (
       <div className="flex items-center mb-0 min-h-[32px]">
         <span className="sticky left-0 z-10 flex items-center justify-between bg-green-50 dark:bg-green-900 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 text-sm text-left select-none px-2 font-semibold text-green-700 dark:text-green-300" style={{ minWidth: TRACK_HEADER_WIDTH, width: TRACK_HEADER_WIDTH, borderRadius: 0 }}>
-          Marker
+          <span>Marker</span>
+          <button
+            className="w-5 h-5 rounded bg-red-200 dark:bg-red-700 text-red-900 dark:text-white flex items-center justify-center hover:bg-red-300 dark:hover:bg-red-600 text-xs"
+            onClick={handleClearMarkerTrack}
+            title="Clear Marker track"
+            type="button"
+          >×
+          </button>
         </span>
         <div className="flex-1 min-w-0 flex items-center h-8 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded">
           {Array.from({ length: measureCount }).map((_, measureIdx) => (
             <div key={measureIdx} className="flex items-center h-full">
-              {pattern.map((seg, segIdx) => (
-                <React.Fragment key={`marker-fragment-${measureIdx}-${segIdx}`}>
-                  <span
-                    key={`bar-${segIdx}`}
-                    style={{
-                      width: `${GRID_CELL_WIDTH * zoom}px`,
-                      minWidth: `${GRID_CELL_WIDTH * zoom}px`,
-                      display: 'inline-block',
-                      textAlign: 'center'
-                    }}
-                    className="select-none font-solfa"
-                  >
-                    {'\u00A0'}
-                  </span>
-                  <div
-                    key={`marker-${segIdx}`}
-                    className="flex-shrink-0 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center cursor-pointer"
-                    style={{ width: `${GRID_CELL_WIDTH * 4 * zoom}px`, height: 28 }}
-                    onClick={() => {
-                      if (selectedMarker) {
-                        // Place marker logic here
-                        console.log(`Placing marker ${selectedMarker} at measure ${measureIdx + 1}, segment ${segIdx + 1}`);
-                        setSelectedMarker(null); // Reset after placement
-                      }
-                    }}
-                  >
-                    {/* Marker cell placeholder */}
-                  </div>
-                </React.Fragment>
-              ))}
+              {pattern.map((seg, segIdx) => {
+                const markerKey = `${measureIdx}-${segIdx}`;
+                const marker = markers[markerKey];
+                
+                return (
+                  <React.Fragment key={`marker-fragment-${measureIdx}-${segIdx}`}>
+                    <span
+                      key={`bar-${segIdx}`}
+                      style={{
+                        width: `${GRID_CELL_WIDTH * zoom}px`,
+                        minWidth: `${GRID_CELL_WIDTH * zoom}px`,
+                        display: 'inline-block',
+                        textAlign: 'center'
+                      }}
+                      className="select-none font-solfa"
+                    >
+                      {'\u00A0'}
+                    </span>
+                    <div
+                      key={`marker-${segIdx}`}
+                      className={`flex-shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer transition-colors text-xs font-medium ${
+                        marker 
+                          ? `${getMarkerColor(marker)} hover:opacity-80` 
+                          : 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                      style={{ width: `${GRID_CELL_WIDTH * 4 * zoom}px`, height: 28 }}
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const existingMarker = markers[markerKey];
+                        
+                        // Initialize pending marker with existing marker or empty
+                        setPendingMarker(existingMarker || '');
+                        
+                        setMarkerPopup({
+                          measureIdx,
+                          segIdx,
+                          x: rect.left,
+                          y: rect.top
+                        });
+                      }}
+                      title={marker || 'Click to add marker'}
+                    >
+                      <span className="truncate px-1">
+                        {marker || '+'}
+                      </span>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -928,11 +1108,14 @@ const TrackPanel = () => {
       if (lyricPopup && !isInsidePopup) {
         handleLyricCancel();
       }
+      if (markerPopup && !isInsidePopup) {
+        handleMarkerCancel();
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [chordPopup, lyricPopup]);
+  }, [chordPopup, lyricPopup, markerPopup]);
 
   // Render clear warning dialog
   const renderClearWarningDialog = () => {
@@ -971,6 +1154,7 @@ const TrackPanel = () => {
     <>
       {renderChordPopup()}
       {renderLyricPopup()}
+      {renderMarkerPopup()}
       {renderClearWarningDialog()}
       <div
         className={`fixed bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 transition-all duration-300 ${isCollapsed ? 'h-12' : ''}`}

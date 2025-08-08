@@ -71,6 +71,9 @@ const TrackPanel = () => {
   const [markers, setMarkers] = useState<Record<string, string>>({});
   const [markerPopup, setMarkerPopup] = useState<{ measureIdx: number; segIdx: number; x: number; y: number } | null>(null);
   const [pendingMarker, setPendingMarker] = useState<string>('');
+  const [notes, setNotes] = useState<Record<string, { note: NoteType; octave: number; subdivision: string; articulation?: string }>>({});
+  const [notePopup, setNotePopup] = useState<{ measureIdx: number; segIdx: number; boxIdx: number; voicePart: VoicePart; x: number; y: number } | null>(null);
+  const [pendingNote, setPendingNote] = useState<{ note: NoteType; octave: number; subdivision: string; articulation?: string }>({ note: 'd', octave: 0, subdivision: '', articulation: undefined });
 
   const clearAll = () => {
     setTracks({
@@ -83,6 +86,7 @@ const TrackPanel = () => {
     setChords({});
     setLyrics({});
     setMarkers({});
+    setNotes({});
   };
 
   // Clear track functions with warnings
@@ -122,6 +126,25 @@ const TrackPanel = () => {
       setLyrics({});
     } else if (clearWarning.type === 'Marker') {
       setMarkers({});
+    }
+
+    // Clear notes for specific SATB track
+    if (clearWarning.type === 'SATB' && clearWarning.trackName) {
+      const part = Object.keys(SATB_LABELS).find(key => 
+        SATB_LABELS[key as VoicePart] === clearWarning.trackName
+      ) as VoicePart;
+      
+      if (part) {
+        setNotes(prev => {
+          const newNotes = { ...prev };
+          Object.keys(newNotes).forEach(key => {
+            if (key.endsWith(`-${part}`)) {
+              delete newNotes[key];
+            }
+          });
+          return newNotes;
+        });
+      }
     }
 
     setClearWarning(null);
@@ -175,6 +198,148 @@ const TrackPanel = () => {
   const getMarkerColor = (markerText: string) => {
     const template = MARKER_TEMPLATES.find(t => t.value === markerText);
     return template ? template.color : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
+  };
+
+  // Note entry constants and functions
+  const SOLFA_NOTES: { note: NoteType; label: string }[] = [
+    { note: 'd', label: 'Do (d)' },
+    { note: 'r', label: 'Re (r)' },
+    { note: 'm', label: 'Mi (m)' },
+    { note: 'f', label: 'Fa (f)' },
+    { note: 's', label: 'Sol (s)' },
+    { note: 'l', label: 'La (l)' },
+    { note: 't', label: 'Ti (t)' }
+  ];
+
+  const OCTAVE_OPTIONS = [
+    { value: 2, label: '2 (High)', display: '²' },
+    { value: 1, label: '1 (High)', display: '¹' },
+    { value: 0, label: 'Normal', display: '' },
+    { value: -1, label: '1 (Low)', display: '₁' },
+    { value: -2, label: '2 (Low)', display: '₂' }
+  ];
+
+  const SUBDIVISION_OPTIONS = [
+    { value: '', label: 'None', display: '' },
+    { value: '.', label: 'Dot (.)', display: '.' },
+    { value: '.,', label: 'Dot Comma (.,)', display: '.,' },
+    { value: ',', label: 'Comma (,)', display: ',' }
+  ];
+
+  const ARTICULATION_OPTIONS = [
+    { value: undefined, label: 'None' },
+    { value: 'staccato', label: 'Staccato (•)' },
+    { value: 'accent', label: 'Accent (>)' },
+    { value: 'tenuto', label: 'Tenuto (-)' },
+    { value: 'legato', label: 'Legato (~)' }
+  ];
+
+  // Note entry handlers
+  const handleNoteAdd = () => {
+    if (!notePopup) return;
+    
+    const { measureIdx, segIdx, boxIdx, voicePart } = notePopup;
+    const noteKey = `${measureIdx}-${segIdx}-${boxIdx}-${voicePart}`;
+    
+    setNotes(prev => ({
+      ...prev,
+      [noteKey]: { ...pendingNote }
+    }));
+
+    // Auto-harmonization for Soprano voice
+    if (voicePart === 'S') {
+      generateHarmony(measureIdx, segIdx, pendingNote);
+    }
+    
+    setNotePopup(null);
+    setPendingNote({ note: 'd', octave: 0, subdivision: '', articulation: undefined });
+  };
+
+  const handleNoteDelete = (measureIdx: number, segIdx: number, boxIdx: number, voicePart: VoicePart) => {
+    const noteKey = `${measureIdx}-${segIdx}-${boxIdx}-${voicePart}`;
+    setNotes(prev => {
+      const newNotes = { ...prev };
+      delete newNotes[noteKey];
+      return newNotes;
+    });
+  };
+
+  const handleNoteCancel = () => {
+    setNotePopup(null);
+    setPendingNote({ note: 'd', octave: 0, subdivision: '', articulation: undefined });
+  };
+
+  // Auto-harmonization function
+  const generateHarmony = (measureIdx: number, segIdx: number, sopranoNote: { note: NoteType; octave: number; subdivision: string; articulation?: string }) => {
+    const chordKey = `${measureIdx}-${segIdx}`;
+    const chord = chords[chordKey];
+    
+    if (!chord) return; // No chord reference, skip harmonization
+
+    // Basic harmony mapping based on chord type
+    const harmonyMap: Record<string, Partial<Record<NoteType, { A: NoteType; T: NoteType; B: NoteType }>>> = {
+      'maj': {
+        'd': { A: 'm', T: 's', B: 'd' },
+        'r': { A: 'f', T: 'l', B: 'd' },
+        'm': { A: 's', T: 'd', B: 'm' },
+        'f': { A: 'l', T: 'd', B: 'f' },
+        's': { A: 'd', T: 'm', B: 's' },
+        'l': { A: 'm', T: 'f', B: 'l' },
+        't': { A: 'f', T: 's', B: 'd' },
+        'c': { A: 's', T: 'd', B: 'c' },
+        'b': { A: 'd', T: 'f', B: 'b' }
+      },
+      'min': {
+        'd': { A: 'm', T: 's', B: 'd' },
+        'r': { A: 'f', T: 'l', B: 'd' },
+        'm': { A: 's', T: 'd', B: 'm' },
+        'f': { A: 'l', T: 'd', B: 'f' },
+        's': { A: 'd', T: 'm', B: 's' },
+        'l': { A: 'm', T: 'f', B: 'l' },
+        't': { A: 'f', T: 's', B: 'd' },
+        'c': { A: 's', T: 'd', B: 'c' },
+        'b': { A: 'd', T: 'f', B: 'b' }
+      }
+    };
+
+    const harmony = harmonyMap[chord.type]?.[sopranoNote.note];
+    if (!harmony) return;
+
+    // Generate harmony notes for A, T, B voices
+    const voices: { voice: VoicePart; key: keyof typeof harmony }[] = [
+      { voice: 'A', key: 'A' },
+      { voice: 'T', key: 'T' },
+      { voice: 'B', key: 'B' }
+    ];
+    
+    voices.forEach(({ voice, key }) => {
+      const harmonyNote = harmony[key];
+      if (harmonyNote) {
+        // Adjust octaves for voice ranges
+        let octaveAdjustment = 0;
+        if (voice === 'A') octaveAdjustment = sopranoNote.octave - 1;
+        else if (voice === 'T') octaveAdjustment = sopranoNote.octave - 1;
+        else if (voice === 'B') octaveAdjustment = sopranoNote.octave - 2;
+
+        const noteKey = `${measureIdx}-${segIdx}-0-${voice}`; // Using boxIdx 0 for harmony
+        setNotes(prev => ({
+          ...prev,
+          [noteKey]: {
+            note: harmonyNote,
+            octave: Math.max(-2, Math.min(2, octaveAdjustment)),
+            subdivision: sopranoNote.subdivision,
+            articulation: sopranoNote.articulation
+          }
+        }));
+      }
+    });
+  };
+
+  // Format note display
+  const formatNoteDisplay = (noteData: { note: NoteType; octave: number; subdivision: string; articulation?: string }) => {
+    const octaveDisplay = OCTAVE_OPTIONS.find(o => o.value === noteData.octave)?.display || '';
+    const subdivisionDisplay = noteData.subdivision;
+    return `${subdivisionDisplay}${noteData.note}${octaveDisplay}`;
   };
 
   const addMeasure = () => {
@@ -526,7 +691,156 @@ const TrackPanel = () => {
     ))
   );
 
-  // Update SATB tracks to allow togglable note selection with subdivision beats
+  // Render note popup
+  const renderNotePopup = () => {
+    if (!notePopup) return null;
+
+    const existingNoteKey = `${notePopup.measureIdx}-${notePopup.segIdx}-${notePopup.boxIdx}-${notePopup.voicePart}`;
+    const existingNote = notes[existingNoteKey];
+
+    return (
+      <div 
+        className="fixed bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg p-4 z-50"
+        style={{ 
+          left: notePopup.x, 
+          top: notePopup.y - 320,
+          minWidth: '280px'
+        }}
+      >
+        <h3 className="text-sm font-semibold mb-3">Add Note - {SATB_LABELS[notePopup.voicePart]}</h3>
+        
+        {/* Note Selection */}
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-2 block">Solfa Note</label>
+          <div className="grid grid-cols-4 gap-1">
+            {SOLFA_NOTES.map(({ note, label }) => (
+              <button
+                key={note}
+                className={`px-2 py-2 text-xs rounded transition-colors border ${
+                  pendingNote.note === note 
+                    ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600' 
+                    : 'bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600'
+                }`}
+                onClick={() => setPendingNote(prev => ({ ...prev, note }))}
+              >
+                {note}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Octave Selection */}
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-2 block">Octave</label>
+          <div className="grid grid-cols-3 gap-1">
+            {OCTAVE_OPTIONS.map(({ value, label, display }) => (
+              <button
+                key={value}
+                className={`px-2 py-2 text-xs rounded transition-colors border ${
+                  pendingNote.octave === value 
+                    ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 border-green-300 dark:border-green-600' 
+                    : 'bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600'
+                }`}
+                onClick={() => setPendingNote(prev => ({ ...prev, octave: value }))}
+              >
+                {label.split(' ')[0]}{display}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Subdivision Selection */}
+        <div className="mb-3">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-2 block">Subdivision (Beat)</label>
+          <div className="grid grid-cols-2 gap-1">
+            {SUBDIVISION_OPTIONS.map(({ value, label, display }) => (
+              <button
+                key={value}
+                className={`px-2 py-2 text-xs rounded transition-colors border ${
+                  pendingNote.subdivision === value 
+                    ? 'bg-yellow-100 dark:bg-yellow-800 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-600' 
+                    : 'bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600'
+                }`}
+                onClick={() => setPendingNote(prev => ({ ...prev, subdivision: value }))}
+              >
+                {display || 'None'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Articulation Selection */}
+        <div className="mb-4">
+          <label className="text-xs text-slate-500 dark:text-slate-400 mb-2 block">Articulation</label>
+          <div className="grid grid-cols-2 gap-1">
+            {ARTICULATION_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value || 'none'}
+                className={`px-2 py-2 text-xs rounded transition-colors border ${
+                  pendingNote.articulation === value 
+                    ? 'bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-600' 
+                    : 'bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600'
+                }`}
+                onClick={() => setPendingNote(prev => ({ ...prev, articulation: value }))}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div className="mb-4 p-2 bg-slate-50 dark:bg-slate-700 rounded border">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Preview: </span>
+          <span className="font-mono text-sm font-semibold">
+            {formatNoteDisplay(pendingNote)}
+          </span>
+        </div>
+
+        {/* Harmonization Notice */}
+        {notePopup.voicePart === 'S' && (
+          <div className="mb-4 p-2 bg-blue-50 dark:bg-blue-900 rounded border border-blue-200 dark:border-blue-700">
+            <span className="text-xs text-blue-600 dark:text-blue-300">
+              ⓘ Soprano notes will auto-generate harmony for A, T, B voices based on chord track
+            </span>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 justify-between">
+          <div>
+            {existingNote && (
+              <button
+                className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded"
+                onClick={() => {
+                  handleNoteDelete(notePopup.measureIdx, notePopup.segIdx, notePopup.boxIdx, notePopup.voicePart);
+                  handleNoteCancel();
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded hover:bg-slate-300 dark:hover:bg-slate-500"
+              onClick={handleNoteCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              onClick={handleNoteAdd}
+            >
+              Add Note
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Update SATB tracks with note entry and display
   const renderSATBTracks = () => (
     (["S", "A", "T", "B"] as VoicePart[]).map((part, rowIdx) => {
       const pattern = getSolfaBarBoxPattern(timeSignature);
@@ -560,26 +874,52 @@ const TrackPanel = () => {
                       {seg.bar}
                     </span>
                     {Array.from({ length: seg.boxes }).map((_, boxIdx) => {
+                      const noteKey = `${measureIdx}-${segIdx}-${boxIdx}-${part}`;
+                      const noteData = notes[noteKey];
                       const isSelected = selectedCell && selectedCell.measureIdx === measureIdx && selectedCell.rowIdx === rowIdx && selectedCell.segIdx === segIdx && selectedCell.boxIdx === boxIdx;
+                      
                       return (
                         <div
                           key={`box-${segIdx}-${boxIdx}`}
-                          className={`flex-shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer ${isSelected ? 'bg-blue-200 dark:bg-blue-800' : 'bg-white dark:bg-slate-800'} ${debugGrid ? 'outline outline-2 outline-pink-400' : ''}`}
+                          className={`flex-shrink-0 border border-slate-200 dark:border-slate-700 flex items-center justify-center cursor-pointer transition-colors ${
+                            isSelected 
+                              ? 'bg-blue-200 dark:bg-blue-800' 
+                              : noteData
+                                ? 'bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-800'
+                                : 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
+                          } ${debugGrid ? 'outline outline-2 outline-pink-400' : ''}`}
                           style={{ width: `${GRID_CELL_WIDTH * zoom}px`, height: 28 }}
-                          onClick={() => {
+                          onClick={(e) => {
                             setSelectedCell({ measureIdx, rowIdx, segIdx, boxIdx });
-                            // Note entry logic here
-                            if (currentNote) {
-                              const note = isHighOctave ? currentNote.toUpperCase() : isLowOctave ? currentNote.toLowerCase() : currentNote;
-                              console.log(`Placing note ${note} with subdivision ${currentSubdivision} and articulation ${currentArticulation} at measure ${measureIdx + 1}, segment ${segIdx + 1}, box ${boxIdx + 1}, row ${rowIdx + 1}`);
+                            
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const existingNote = notes[noteKey];
+                            
+                            // Initialize pending note with existing note or defaults
+                            if (existingNote) {
+                              setPendingNote({ ...existingNote });
+                            } else {
+                              setPendingNote({ note: 'd', octave: 0, subdivision: '', articulation: undefined });
                             }
+                            
+                            setNotePopup({
+                              measureIdx,
+                              segIdx,
+                              boxIdx,
+                              voicePart: part,
+                              x: rect.left,
+                              y: rect.top
+                            });
                           }}
                           tabIndex={isSelected ? 0 : -1}
                           ref={isSelected ? selectedCellRef : undefined}
                           onKeyDown={e => handleGridKeyDown(e, measureIdx, rowIdx, segIdx, boxIdx)}
                           aria-label={`Cell ${measureIdx + 1}, Row ${rowIdx + 1}, Segment ${segIdx + 1}, Box ${boxIdx + 1}`}
+                          title={noteData ? formatNoteDisplay(noteData) : 'Click to add note'}
                         >
-                          {/* Note cell placeholder */}
+                          <span className="text-xs font-mono font-semibold text-blue-700 dark:text-blue-300">
+                            {noteData ? formatNoteDisplay(noteData) : ''}
+                          </span>
                         </div>
                       );
                     })}
@@ -1111,11 +1451,14 @@ const TrackPanel = () => {
       if (markerPopup && !isInsidePopup) {
         handleMarkerCancel();
       }
+      if (notePopup && !isInsidePopup) {
+        handleNoteCancel();
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [chordPopup, lyricPopup, markerPopup]);
+  }, [chordPopup, lyricPopup, markerPopup, notePopup]);
 
   // Render clear warning dialog
   const renderClearWarningDialog = () => {
@@ -1155,6 +1498,7 @@ const TrackPanel = () => {
       {renderChordPopup()}
       {renderLyricPopup()}
       {renderMarkerPopup()}
+      {renderNotePopup()}
       {renderClearWarningDialog()}
       <div
         className={`fixed bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 transition-all duration-300 ${isCollapsed ? 'h-12' : ''}`}

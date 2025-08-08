@@ -67,6 +67,7 @@ const TrackPanel = () => {
   const [lyrics, setLyrics] = useState<Record<string, string>>({});
   const [lyricPopup, setLyricPopup] = useState<{ measureIdx: number; segIdx: number; boxIdx: number; x: number; y: number } | null>(null);
   const [pendingLyric, setPendingLyric] = useState<string>('');
+  const [clearWarning, setClearWarning] = useState<{type: 'SATB' | 'Chord' | 'Lyrics'; trackName?: string} | null>(null);
 
   const clearAll = () => {
     setTracks({
@@ -78,6 +79,46 @@ const TrackPanel = () => {
     });
     setChords({});
     setLyrics({});
+  };
+
+  // Clear track functions with warnings
+  const handleClearSATBTrack = (part: VoicePart) => {
+    setClearWarning({ type: 'SATB', trackName: SATB_LABELS[part] });
+  };
+
+  const handleClearChordTrack = () => {
+    setClearWarning({ type: 'Chord' });
+  };
+
+  const handleClearLyricsTrack = () => {
+    setClearWarning({ type: 'Lyrics' });
+  };
+
+  const confirmClear = () => {
+    if (!clearWarning) return;
+
+    if (clearWarning.type === 'SATB' && clearWarning.trackName) {
+      const part = Object.keys(SATB_LABELS).find(key => 
+        SATB_LABELS[key as VoicePart] === clearWarning.trackName
+      ) as VoicePart;
+      
+      if (part) {
+        setTracks(prev => ({
+          ...prev,
+          [part]: []
+        }));
+      }
+    } else if (clearWarning.type === 'Chord') {
+      setChords({});
+    } else if (clearWarning.type === 'Lyrics') {
+      setLyrics({});
+    }
+
+    setClearWarning(null);
+  };
+
+  const cancelClear = () => {
+    setClearWarning(null);
   };
 
   const addMeasure = () => {
@@ -311,8 +352,15 @@ const TrackPanel = () => {
       const pattern = getSolfaBarBoxPattern(timeSignature);
       return (
         <div key={part} className="flex items-center mb-0 min-h-[28px]">
-          <span className={`sticky left-0 top-0 z-10 w-32 px-2 py-1 font-semibold border-b border-slate-300 dark:border-slate-700 flex-shrink-0 text-sm text-left ${SATB_HEADER_COLORS[part]}`} style={{ minWidth: TRACK_HEADER_WIDTH, borderRadius: 0 }}>
-            {SATB_LABELS[part]}
+          <span className={`sticky left-0 top-0 z-10 w-32 px-2 py-1 font-semibold border-b border-slate-300 dark:border-slate-700 flex-shrink-0 text-sm text-left ${SATB_HEADER_COLORS[part]} flex items-center justify-between`} style={{ minWidth: TRACK_HEADER_WIDTH, borderRadius: 0 }}>
+            <span>{SATB_LABELS[part]}</span>
+            <button
+              className="w-5 h-5 rounded bg-red-200 dark:bg-red-700 text-red-900 dark:text-white flex items-center justify-center hover:bg-red-300 dark:hover:bg-red-600 text-xs"
+              onClick={() => handleClearSATBTrack(part)}
+              title={`Clear ${SATB_LABELS[part]} track`}
+              type="button"
+            >×
+            </button>
           </span>
           <div className="flex-1 min-w-0 flex">
             {Array.from({ length: measureCount }).map((_, measureIdx) => (
@@ -544,8 +592,15 @@ const TrackPanel = () => {
     const pattern = getSolfaBarBoxPattern(timeSignature);
     return (
       <div className="flex items-center mb-0 min-h-[28px]">
-        <span className="sticky left-0 z-10 w-32 px-2 py-1 font-semibold border-b border-slate-300 dark:border-slate-700 flex-shrink-0 text-sm text-left bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200" style={{ minWidth: TRACK_HEADER_WIDTH, borderRadius: 0 }}>
-          Lyrics
+        <span className="sticky left-0 z-10 w-32 px-2 py-1 font-semibold border-b border-slate-300 dark:border-slate-700 flex-shrink-0 text-sm text-left bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between" style={{ minWidth: TRACK_HEADER_WIDTH, borderRadius: 0 }}>
+          <span>Lyrics</span>
+          <button
+            className="w-5 h-5 rounded bg-red-200 dark:bg-red-700 text-red-900 dark:text-white flex items-center justify-center hover:bg-red-300 dark:hover:bg-red-600 text-xs"
+            onClick={handleClearLyricsTrack}
+            title="Clear Lyrics track"
+            type="button"
+          >×
+          </button>
         </span>
         <div className="flex-1 min-w-0 flex">
           {Array.from({ length: measureCount }).map((_, measureIdx) => (
@@ -759,8 +814,15 @@ const TrackPanel = () => {
     const pattern = getSolfaBarBoxPattern(timeSignature);
     return (
       <div className="flex items-center mb-0 min-h-[28px]">
-        <span className="sticky left-0 z-10 w-32 px-2 py-1 font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 text-sm text-left" style={{ minWidth: TRACK_HEADER_WIDTH, borderRadius: 0 }}>
-          Chord Track
+        <span className="sticky left-0 z-10 w-32 px-2 py-1 font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900 border-b border-slate-300 dark:border-slate-700 flex-shrink-0 text-sm text-left flex items-center justify-between" style={{ minWidth: TRACK_HEADER_WIDTH, borderRadius: 0 }}>
+          <span>Chord Track</span>
+          <button
+            className="w-5 h-5 rounded bg-red-200 dark:bg-red-700 text-red-900 dark:text-white flex items-center justify-center hover:bg-red-300 dark:hover:bg-red-600 text-xs"
+            onClick={handleClearChordTrack}
+            title="Clear Chord track"
+            type="button"
+          >×
+          </button>
         </span>
         <div className="flex-1 min-w-0 flex">
           {Array.from({ length: measureCount }).map((_, measureIdx) => (
@@ -872,10 +934,44 @@ const TrackPanel = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [chordPopup, lyricPopup]);
 
+  // Render clear warning dialog
+  const renderClearWarningDialog = () => {
+    if (!clearWarning) return null;
+
+    const trackName = clearWarning.type === 'SATB' ? clearWarning.trackName : clearWarning.type;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg p-6 max-w-md">
+          <h3 className="text-lg font-semibold mb-3 text-red-600 dark:text-red-400">Clear Track Data</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+            Are you sure you want to clear all data from the <strong>{trackName}</strong> track? 
+            This action cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 rounded hover:bg-slate-300 dark:hover:bg-slate-500"
+              onClick={cancelClear}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+              onClick={confirmClear}
+            >
+              Clear Track
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       {renderChordPopup()}
       {renderLyricPopup()}
+      {renderClearWarningDialog()}
       <div
         className={`fixed bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 transition-all duration-300 ${isCollapsed ? 'h-12' : ''}`}
         style={{

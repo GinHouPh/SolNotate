@@ -64,6 +64,7 @@ const TrackPanel = () => {
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [chordPopup, setChordPopup] = useState<{ measureIdx: number; segIdx: number; x: number; y: number } | null>(null);
   const [chords, setChords] = useState<Record<string, { root: string; type: string; symbol: string }>>({});
+  const [pendingChord, setPendingChord] = useState<{ root: string; type: string }>({ root: 'C', type: 'maj' });
 
   const clearAll = () => {
     setTracks({
@@ -460,21 +461,28 @@ const TrackPanel = () => {
     { value: 'min7', label: 'Minor 7th', symbol: 'm7' }
   ];
 
-  // Handle chord selection
-  const handleChordSelect = (root: string, type: string) => {
+  // Handle chord addition
+  const handleChordAdd = () => {
     if (!chordPopup) return;
     
     const { measureIdx, segIdx } = chordPopup;
     const chordKey = `${measureIdx}-${segIdx}`;
-    const typeInfo = CHORD_TYPES.find(t => t.value === type);
-    const symbol = `${root}${typeInfo?.symbol || ''}`;
+    const typeInfo = CHORD_TYPES.find(t => t.value === pendingChord.type);
+    const symbol = `${pendingChord.root}${typeInfo?.symbol || ''}`;
     
     setChords(prev => ({
       ...prev,
-      [chordKey]: { root, type, symbol }
+      [chordKey]: { root: pendingChord.root, type: pendingChord.type, symbol }
     }));
     
     setChordPopup(null);
+    setPendingChord({ root: 'C', type: 'maj' });
+  };
+
+  // Handle chord popup close
+  const handleChordCancel = () => {
+    setChordPopup(null);
+    setPendingChord({ root: 'C', type: 'maj' });
   };
 
   // Handle chord deletion
@@ -491,16 +499,26 @@ const TrackPanel = () => {
   const renderChordPopup = () => {
     if (!chordPopup) return null;
 
+    const existingChord = chords[`${chordPopup.measureIdx}-${chordPopup.segIdx}`];
+    const previewTypeInfo = CHORD_TYPES.find(t => t.value === pendingChord.type);
+    const previewSymbol = `${pendingChord.root}${previewTypeInfo?.symbol || ''}`;
+
     return (
       <div 
         className="fixed bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg p-4 z-50"
         style={{ 
           left: chordPopup.x, 
-          top: chordPopup.y - 200,
-          minWidth: '280px'
+          top: chordPopup.y - 220,
+          minWidth: '300px'
         }}
       >
         <h3 className="text-sm font-semibold mb-3">Select Chord</h3>
+        
+        {/* Preview */}
+        <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900 rounded border">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Preview: </span>
+          <span className="font-semibold text-purple-700 dark:text-purple-300">{previewSymbol}</span>
+        </div>
         
         {/* Chord Roots */}
         <div className="mb-3">
@@ -509,11 +527,12 @@ const TrackPanel = () => {
             {CHORD_ROOTS.map(root => (
               <button
                 key={root}
-                className="px-2 py-1 text-xs border rounded hover:bg-slate-100 dark:hover:bg-slate-700"
-                onClick={() => {
-                  const currentChord = chords[`${chordPopup.measureIdx}-${chordPopup.segIdx}`];
-                  handleChordSelect(root, currentChord?.type || 'maj');
-                }}
+                className={`px-2 py-1 text-xs border rounded transition-colors ${
+                  pendingChord.root === root 
+                    ? 'bg-purple-200 dark:bg-purple-700 border-purple-400 dark:border-purple-500' 
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+                onClick={() => setPendingChord(prev => ({ ...prev, root }))}
               >
                 {root}
               </button>
@@ -522,17 +541,18 @@ const TrackPanel = () => {
         </div>
 
         {/* Chord Types */}
-        <div className="mb-3">
+        <div className="mb-4">
           <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Chord Type</label>
           <div className="grid grid-cols-2 gap-1">
             {CHORD_TYPES.map(chord => (
               <button
                 key={chord.value}
-                className="px-2 py-1 text-xs border rounded text-left hover:bg-slate-100 dark:hover:bg-slate-700"
-                onClick={() => {
-                  const currentChord = chords[`${chordPopup.measureIdx}-${chordPopup.segIdx}`];
-                  handleChordSelect(currentChord?.root || 'C', chord.value);
-                }}
+                className={`px-2 py-1 text-xs border rounded text-left transition-colors ${
+                  pendingChord.type === chord.value 
+                    ? 'bg-purple-200 dark:bg-purple-700 border-purple-400 dark:border-purple-500' 
+                    : 'hover:bg-slate-100 dark:hover:bg-slate-700'
+                }`}
+                onClick={() => setPendingChord(prev => ({ ...prev, type: chord.value }))}
               >
                 {chord.label}
               </button>
@@ -541,22 +561,34 @@ const TrackPanel = () => {
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-2 justify-end">
-          <button
-            className="px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900"
-            onClick={() => {
-              handleChordDelete(chordPopup.measureIdx, chordPopup.segIdx);
-              setChordPopup(null);
-            }}
-          >
-            Delete
-          </button>
-          <button
-            className="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded hover:bg-slate-300"
-            onClick={() => setChordPopup(null)}
-          >
-            Cancel
-          </button>
+        <div className="flex gap-2 justify-between">
+          <div>
+            {existingChord && (
+              <button
+                className="px-3 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded"
+                onClick={() => {
+                  handleChordDelete(chordPopup.measureIdx, chordPopup.segIdx);
+                  handleChordCancel();
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded hover:bg-slate-300 dark:hover:bg-slate-500"
+              onClick={handleChordCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700"
+              onClick={handleChordAdd}
+            >
+              Add Chord
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -601,6 +633,15 @@ const TrackPanel = () => {
                       style={{ width: `${GRID_CELL_WIDTH * 4 * zoom}px`, height: 28 }}
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
+                        const existingChord = chords[`${measureIdx}-${segIdx}`];
+                        
+                        // Initialize pending chord with existing chord or defaults
+                        if (existingChord) {
+                          setPendingChord({ root: existingChord.root, type: existingChord.type });
+                        } else {
+                          setPendingChord({ root: 'C', type: 'maj' });
+                        }
+                        
                         setChordPopup({
                           measureIdx,
                           segIdx,
@@ -657,7 +698,7 @@ const TrackPanel = () => {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (chordPopup && !(e.target as Element).closest('.fixed')) {
-        setChordPopup(null);
+        handleChordCancel();
       }
     };
 
